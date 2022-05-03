@@ -1,0 +1,82 @@
+---
+title: Canary Current LME robis demo
+date: "`r Sys.Date()`"
+author: Pieter Provoost
+output: (function(...) {
+  rmdformats::robobook(toc_depth = 4, pandoc_args = c("+RTS", "-K2000m", "-RTS"), ...) })
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "docs") })  
+---
+
+This notebook is a quick demonstration of the robis R package for fetching occurrence data relevant to the Canary Current LME.
+
+## Dependencies
+
+```{r message=FALSE, warning=FALSE}
+library(robis)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+```
+
+## Fetching occurrences
+
+The OBIS database has a number of geographic areas against which the occurrence data are indexed. This includes LMEs. Use the `areas()` function to get a list of LME area identifiers.
+
+```{r message=FALSE, warning=FALSE}
+areas <- area() %>%
+  filter(type == "lme")
+
+areas %>% rmarkdown::paged_table()
+```
+<br/>
+Then use the Canary Current LME area ID as a filter in the `occurrence()` function.
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+occ <- occurrence(areaid = 40027)
+occ
+```
+
+Let's create a map:
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+land <- ne_coastline(returnclass = "sf", scale = "large")
+
+ggplot() +
+  geom_sf(data = land, size = 0.5) +
+  geom_sf(data = occ %>% st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326), size = 0.1, color = "#45add6") +
+  coord_sf(xlim = c(-26, -3), ylim = c(10, 38), default_crs = sf::st_crs(4326)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+```
+
+## WRiMS taxa
+
+While it's possible to filter the dataframe we downloaded earlier based on value in the `wrims` column, the `occurrence()` function also has a `wrims` filter which restricts results to species listed in the World Register of Introduced Marine Species (WRiMS). Note that this currently does not take into account native versus introduced ranges.
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+occ_wrims <- occurrence(areaid = 40027, wrims = TRUE)
+occ_wrims
+```
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+ggplot() +
+  geom_sf(data = land, size = 0.5) +
+  geom_sf(data = occ_wrims %>% st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326), size = 0.1, color = "#45add6") +
+  coord_sf(xlim = c(-26, -3), ylim = c(10, 38), default_crs = sf::st_crs(4326)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+```
+
+Let's take a look at the most common WRiMS species for the CCLME:
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+occ_wrims %>%
+  filter(!is.na(species)) %>%
+  group_by(class, species) %>%
+  summarize(records = n()) %>%
+  arrange(desc(records)) %>%
+  rmarkdown::paged_table()
+```
+
